@@ -221,6 +221,7 @@ export default function Home() {
   const [selectedChannel, setSelectedChannel] = useState<Channel>(channels[0]);
   const [hasUserSelectedChannel, setHasUserSelectedChannel] = useState(false);
   const [userRequestedPlayback, setUserRequestedPlayback] = useState(false);
+  const [playWithSound, setPlayWithSound] = useState(false);
   const [channelStatuses, setChannelStatuses] = useState<Record<number, ChannelLiveState>>({});
   const [liveVideoId, setLiveVideoId] = useState<string | null>(null);
   const [liveTitle, setLiveTitle] = useState("");
@@ -771,6 +772,7 @@ export default function Home() {
   const handleOpenChannel = async (channel: Channel) => {
     setHasUserSelectedChannel(true);
     setUserRequestedPlayback(true);
+    setPlayWithSound(false);
     selectedChannelRef.current = channel;
     setSelectedChannel(channel);
     updateRecentHistory(channel);
@@ -973,14 +975,14 @@ export default function Home() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(220,38,38,0.18),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.04),transparent_35%)]" />
 
-        <div className="relative mx-auto grid min-h-0 max-w-7xl items-center gap-8 px-4 pb-10 pt-9 sm:px-5 sm:pb-12 sm:pt-12 md:px-6 lg:min-h-[82vh] lg:grid-cols-[1.05fr_1.2fr] lg:gap-12 lg:pt-16 xl:pt-20">
-          <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-red-300 sm:mb-7 sm:px-4 sm:text-xs sm:tracking-[0.28em]">
+        <div className="relative mx-auto grid min-h-0 max-w-7xl items-center gap-6 px-4 pb-8 pt-5 sm:gap-8 sm:px-5 sm:pb-12 sm:pt-10 md:px-6 lg:min-h-[82vh] lg:grid-cols-[1.05fr_1.2fr] lg:gap-12 lg:pt-16 xl:pt-20">
+          <div className="order-2 lg:order-1">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-red-300 sm:mb-7 sm:px-4 sm:text-xs sm:tracking-[0.28em]">
               <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
               Live TV Experience
             </div>
 
-            <h1 className="max-w-3xl text-[2.55rem] font-black leading-[1.02] tracking-[-0.045em] sm:text-5xl md:text-6xl xl:text-7xl">
+            <h1 className="max-w-3xl text-[2.35rem] font-black leading-[1.01] tracking-[-0.045em] min-[390px]:text-[2.7rem] sm:text-5xl md:text-6xl xl:text-7xl">
               {heroFirstLine}
               {heroSecondLine ? (
                 <span className="mt-2 block bg-gradient-to-r from-white via-white to-red-500 bg-clip-text text-transparent">
@@ -989,14 +991,14 @@ export default function Home() {
               ) : null}
             </h1>
 
-            <p className="mt-5 max-w-xl text-[15px] leading-7 text-white/65 sm:mt-6 sm:text-lg sm:leading-8">
+            <p className="mt-4 max-w-xl text-[14px] leading-6 text-white/60 sm:mt-6 sm:text-lg sm:leading-8">
               {siteSettings.heroSubheading}
             </p>
 
-            <div className="mt-7 grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 sm:mt-8 sm:flex sm:flex-row sm:flex-wrap sm:gap-4">
+            <div className="mt-5 grid grid-cols-2 gap-2.5 sm:mt-8 sm:flex sm:flex-row sm:flex-wrap sm:gap-4">
               <a
                 href="#player"
-                className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3.5 text-sm font-bold tracking-[0.02em] transition duration-300 hover:bg-red-500 sm:inline-flex sm:px-7"
+                className="flex min-h-11 items-center justify-center gap-2 rounded-full bg-red-600 px-4 py-3 text-xs font-bold tracking-[0.02em] transition duration-300 hover:bg-red-500 sm:min-h-12 sm:inline-flex sm:px-7 sm:py-3.5 sm:text-sm"
               >
                 <span>▶</span>
                 Watch Live
@@ -1004,7 +1006,7 @@ export default function Home() {
 
               <a
                 href="#categories"
-                className="flex min-h-12 items-center justify-center rounded-full border border-white/10 bg-white/5 px-6 py-3.5 text-center text-sm font-semibold text-white/90 transition duration-300 hover:border-white/20 hover:bg-white/10 sm:px-7"
+                className="flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-center text-xs font-semibold text-white/90 transition duration-300 hover:border-white/20 hover:bg-white/10 sm:min-h-12 sm:px-7 sm:py-3.5 sm:text-sm"
               >
                 Browse Channels
               </a>
@@ -1014,14 +1016,14 @@ export default function Home() {
           <div
             id="player"
             ref={playerRef}
-            className={`relative scroll-mt-24 transition duration-500 sm:scroll-mt-28 ${
+            className={`relative order-1 scroll-mt-20 transition duration-500 sm:scroll-mt-28 lg:order-2 ${
               hasUserSelectedChannel ? "rounded-3xl ring-1 ring-red-500/30" : ""
             }`}
           >
             <div className="absolute -inset-4 rounded-full bg-red-600/10 blur-3xl sm:-inset-8" />
 
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#090909] p-2.5 shadow-[0_18px_45px_rgba(0,0,0,0.45)] sm:rounded-3xl sm:p-3">
-              <div className="mb-2.5 flex min-w-0 items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-2.5 py-2 sm:mb-3 sm:rounded-2xl sm:px-3 sm:py-2.5">
+            <div className="relative overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#090909] p-2 shadow-[0_18px_45px_rgba(0,0,0,0.45)] sm:rounded-3xl sm:p-3">
+              <div className="mb-2 flex min-w-0 items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-2.5 py-2 sm:mb-3 sm:rounded-2xl sm:px-3 sm:py-2.5">
                 <div className="flex min-w-0 items-center gap-3">
                   <ChannelIdentity channel={selectedChannel} compact />
                   <div className="min-w-0">
@@ -1052,16 +1054,35 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="relative aspect-video min-h-[190px] overflow-hidden rounded-xl bg-black sm:min-h-0 sm:rounded-2xl">
+              <div className="relative aspect-video min-h-[180px] overflow-hidden rounded-xl bg-black sm:min-h-0 sm:rounded-2xl">
                 {liveVideoId ? (
-                  <iframe
-                    key={liveVideoId}
-                    className="h-full w-full"
-                    src={`https://www.youtube.com/embed/${liveVideoId}?autoplay=1&mute=1&rel=0&playsinline=1`}
-                    title={`${selectedChannel.name} Live`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                  />
+                  playWithSound ? (
+                    <iframe
+                      key={`${liveVideoId}-sound`}
+                      className="h-full w-full"
+                      src={`https://www.youtube.com/embed/${liveVideoId}?autoplay=1&mute=0&controls=1&rel=0&playsinline=1`}
+                      title={`${selectedChannel.name} Live`}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setPlayWithSound(true)}
+                      className="absolute inset-0 z-20 flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_center,rgba(220,38,38,0.14),transparent_50%),linear-gradient(145deg,#111,#050505)] px-5 text-center transition hover:bg-[#0c0c0c] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-500/50"
+                      aria-label={`Play ${selectedChannel.name} with sound`}
+                    >
+                      <span className="flex h-16 w-16 items-center justify-center rounded-full border border-red-400/30 bg-red-600 text-2xl text-white shadow-[0_12px_30px_rgba(220,38,38,0.28)] sm:h-20 sm:w-20 sm:text-3xl">
+                        ▶
+                      </span>
+                      <span className="mt-4 text-lg font-black tracking-tight text-white sm:text-2xl">
+                        Tap to play with sound
+                      </span>
+                      <span className="mt-1.5 max-w-sm text-xs leading-5 text-white/50 sm:text-sm">
+                        Audio starts after your tap so mobile browsers allow sound.
+                      </span>
+                    </button>
+                  )
                 ) : officialEmbedUrl ? (
                   <iframe
                     key={officialEmbedUrl}
@@ -1109,9 +1130,9 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between gap-4 px-1.5 pb-1 pt-3 sm:pt-4">
+              <div className="flex items-center justify-between gap-4 px-1.5 pb-1 pt-2.5 sm:pt-4">
                 <div>
-                  <h2 className="text-lg font-bold tracking-tight sm:text-xl">{selectedChannel.name}</h2>
+                  <h2 className="text-base font-bold tracking-tight sm:text-xl">{selectedChannel.name}</h2>
 
                   <p className="mt-1 text-sm text-white/40">
                     {selectedChannel.category} • Pakistan
@@ -1129,24 +1150,24 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="categories" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-11 sm:px-5 sm:py-14 md:px-6 md:scroll-mt-28">
-        <div className="mb-7 flex flex-col justify-between gap-4 sm:mb-9 md:flex-row md:items-end md:gap-5">
+      <section id="categories" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-8 sm:px-5 sm:py-14 md:px-6 md:scroll-mt-28">
+        <div className="mb-5 flex flex-col justify-between gap-2.5 sm:mb-9 sm:gap-4 md:flex-row md:items-end md:gap-5">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.3em] text-red-500">
+            <p className="text-xs font-bold uppercase tracking-[0.28em] text-red-500 sm:text-sm sm:tracking-[0.3em]">
               Live Television
             </p>
 
-            <h2 className="mt-2.5 text-3xl font-black tracking-tight sm:mt-3 md:text-4xl">
+            <h2 className="mt-2 text-[2rem] font-black tracking-tight sm:mt-3 sm:text-3xl md:text-4xl">
               Explore Channels
             </h2>
           </div>
 
-          <p className="max-w-md text-sm leading-7 text-white/55">
+          <p className="max-w-md text-sm leading-6 text-white/50 sm:leading-7">
             Pakistan&apos;s leading television channels in one premium viewing experience.
           </p>
         </div>
 
-        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#0b0b0b] p-3 sm:p-3.5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mb-5 flex flex-col gap-2.5 rounded-2xl border border-white/10 bg-[#0b0b0b] p-2.5 sm:mb-6 sm:gap-3 sm:p-3.5 lg:flex-row lg:items-center lg:justify-between">
           <label className="relative block w-full lg:max-w-md">
             <span className="sr-only">Search channels</span>
             <svg
@@ -1168,7 +1189,7 @@ export default function Home() {
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search channels..."
               aria-label="Search channels"
-              className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] pl-11 pr-11 text-sm text-white placeholder:text-white/40 shadow-inner shadow-black/20 transition focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+              className="h-12 w-full rounded-xl border border-white/10 bg-[#151515] pl-11 pr-11 text-sm text-white placeholder:text-white/40 shadow-inner shadow-black/20 transition focus:border-red-500/60 focus:outline-none focus:ring-2 focus:ring-red-500/20"
             />
             {searchTerm ? (
               <button
@@ -1182,7 +1203,7 @@ export default function Home() {
             ) : null}
           </label>
 
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0 lg:pb-0">
+          <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0 lg:pb-0 lg:pr-0">
             {categories.map((category) => {
               const count =
                 category === "All"
@@ -1195,7 +1216,7 @@ export default function Home() {
                   type="button"
                   onClick={() => setActiveCategory(category)}
                   aria-pressed={effectiveActiveCategory === category}
-                  className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition duration-300 ${
+                  className={`inline-flex h-11 shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-sm font-semibold transition duration-300 ${
                     effectiveActiveCategory === category
                       ? "border-red-500/30 bg-red-600 text-white shadow-[0_10px_25px_rgba(220,38,38,0.18)]"
                       : "border-white/10 bg-white/[0.03] text-white/60 hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
@@ -1217,7 +1238,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setFavoriteFilter((current) => !current)}
-              className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition duration-300 ${
+              className={`inline-flex h-11 shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-sm font-semibold transition duration-300 ${
                 favoriteFilter
                   ? "border-red-500/30 bg-red-600 text-white shadow-[0_10px_25px_rgba(220,38,38,0.18)]"
                   : "border-white/10 bg-white/[0.03] text-white/60 hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
@@ -1266,20 +1287,20 @@ export default function Home() {
       </section>
 
       {recentChannels.length > 0 ? (
-        <section className="mx-auto max-w-7xl px-4 pb-7 sm:px-5 md:px-6">
-          <div className="mb-5 flex items-center justify-between gap-3">
+        <section className="mx-auto max-w-7xl px-4 pb-8 sm:px-5 md:px-6">
+          <div className="mb-4 flex items-end justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-bold uppercase tracking-[0.3em] text-red-500">
+              <p className="text-xs font-bold uppercase tracking-[0.28em] text-red-500 sm:text-sm sm:tracking-[0.3em]">
                 Recently Watched
               </p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
+              <h2 className="mt-1.5 text-2xl font-black tracking-tight md:text-3xl">
                 Continue Watching
               </h2>
             </div>
             <button
               type="button"
               onClick={clearRecentHistory}
-              className="shrink-0 rounded-full border border-white/10 bg-transparent px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45 transition hover:border-white/20 hover:bg-white/[0.04] hover:text-white focus:outline-none focus:ring-2 focus:ring-red-500/30"
+              className="shrink-0 rounded-full border border-white/10 bg-transparent px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/45 transition hover:border-white/20 hover:bg-white/[0.04] hover:text-white focus:outline-none focus:ring-2 focus:ring-red-500/30 sm:text-[10px] sm:tracking-[0.2em]"
             >
               Clear history
             </button>
