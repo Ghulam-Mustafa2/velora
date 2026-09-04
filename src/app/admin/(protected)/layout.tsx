@@ -1,17 +1,27 @@
 import { redirect } from "next/navigation";
+
 import type { ReactNode } from "react";
+
 import { requireAdmin } from "@/lib/supabase/require-admin";
 
 export default async function ProtectedAdminLayout({
-  children,
+
+  children,
+
 }: Readonly<{
-  children: ReactNode;
+
+  children: ReactNode;
+
 }>) {
-  const user = await requireAdmin();
 
-  if (!user) {
-    redirect("/admin/login");
-  }
+  const user = await requireAdmin();
 
-  return children;
+  if (!user) {
+
+    redirect("/admin/login");
+
+  }
+
+  return children;
+
 }

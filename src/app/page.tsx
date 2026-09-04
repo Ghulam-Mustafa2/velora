@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { channels as localChannels, type Channel } from "@/data/channels";
+import { createSupabaseAuthBrowserClient } from "@/lib/supabase/auth-client";
 
 type ChannelLiveState = {
   status:
@@ -55,6 +56,13 @@ type PublicSiteSettingsRow = {
   maintenance_mode?: boolean | null;
   global_notice_enabled?: boolean | null;
   global_notice?: string | null;
+};
+
+type SubscriptionStatusResponse = {
+  ok?: boolean;
+  authenticated?: boolean;
+  active?: boolean;
+  activePlanIds?: string[];
 };
 
 const defaultPublicSiteSettings: PublicSiteSettings = {
@@ -206,7 +214,31 @@ function getChannelLookupUrl(channel: Channel) {
   return null;
 }
 
+function isPremiumChannel(channel: Channel) {
+  return channel.accessType === "paid";
+}
+
+function hasChannelPremiumAccess(
+  channel: Channel,
+  activePlanIds: string[]
+) {
+  if (!isPremiumChannel(channel)) {
+    return true;
+  }
+
+  if (!channel.requiredPlanId) {
+    return false;
+  }
+
+  return activePlanIds.includes(channel.requiredPlanId);
+}
+
 export default function Home() {
+  const [supabase] = useState(() => createSupabaseAuthBrowserClient());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [activePlanIds, setActivePlanIds] = useState<string[]>([]);
+  const [subscriptionChecked, setSubscriptionChecked] = useState(false);
   const [channels, setChannels] = useState<Channel[]>(localChannels);
   const [siteSettings, setSiteSettings] =
     useState<PublicSiteSettings>(defaultPublicSiteSettings);
@@ -241,6 +273,96 @@ export default function Home() {
   useEffect(() => {
     channelStatusesRef.current = channelStatuses;
   }, [channelStatuses]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadAuthState() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mounted) {
+        return;
+      }
+
+      setIsAuthenticated(Boolean(session?.user));
+      setAuthChecked(true);
+    }
+
+    void loadAuthState();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) {
+        return;
+      }
+
+      setIsAuthenticated(Boolean(session?.user));
+      setAuthChecked(true);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSubscriptionStatus() {
+      if (!authChecked) {
+        return;
+      }
+
+      if (!isAuthenticated) {
+        setActivePlanIds([]);
+        setSubscriptionChecked(true);
+        return;
+      }
+
+      setSubscriptionChecked(false);
+
+      try {
+        const response = await fetch("/api/account/subscription", {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json()) as SubscriptionStatusResponse;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (
+          response.ok &&
+          payload.ok &&
+          payload.authenticated &&
+          Array.isArray(payload.activePlanIds)
+        ) {
+          setActivePlanIds(payload.activePlanIds);
+        } else {
+          setActivePlanIds([]);
+        }
+      } catch {
+        if (!cancelled) {
+          setActivePlanIds([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setSubscriptionChecked(true);
+        }
+      }
+    }
+
+    void loadSubscriptionStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authChecked, isAuthenticated]);
 
   useEffect(() => {
     const timers = requestCooldownTimers.current;
@@ -574,6 +696,13 @@ export default function Home() {
   };
 
   const fetchChannelStatus = async (channel: Channel, requestedByUser = false) => {
+    if (
+      isPremiumChannel(channel) &&
+      !hasChannelPremiumAccess(channel, activePlanIds)
+    ) {
+      return;
+    }
+
     if (!requestedByUser && !userRequestedPlayback && !hasUserSelectedChannel) {
       return;
     }
@@ -771,11 +900,35 @@ export default function Home() {
 
   const handleOpenChannel = async (channel: Channel) => {
     setHasUserSelectedChannel(true);
-    setUserRequestedPlayback(true);
     setPlayWithSound(false);
     selectedChannelRef.current = channel;
     setSelectedChannel(channel);
     updateRecentHistory(channel);
+
+    if (
+      isPremiumChannel(channel) &&
+      !hasChannelPremiumAccess(channel, activePlanIds)
+    ) {
+      setUserRequestedPlayback(false);
+      setLiveVideoId(null);
+      setLiveTitle("");
+      setOfficialEmbedUrl(null);
+      setError("");
+      setIsLoading(false);
+
+      setTimeout(() => {
+        playerRef.current?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+          block: "center",
+        });
+      }, 100);
+
+      return;
+    }
+
+    setUserRequestedPlayback(true);
     syncSelectedChannelView(channel, channelStatuses[channel.id] ?? { status: "ready" });
 
     if (isRateLimited(channel.id, rateLimitCooldowns.current)) {
@@ -843,6 +996,14 @@ export default function Home() {
     error: "TEMPORARILY UNAVAILABLE",
     "coming-soon": "COMING SOON",
   }[selectedStatus];
+
+  const selectedIsPremium = isPremiumChannel(selectedChannel);
+  const selectedHasPremiumAccess = hasChannelPremiumAccess(
+    selectedChannel,
+    activePlanIds
+  );
+  const selectedIsPremiumLocked =
+    selectedIsPremium && !selectedHasPremiumAccess;
 
   const heroHeading =
     siteSettings.heroHeading.trim() || "Television, Reimagined.";
@@ -915,12 +1076,21 @@ export default function Home() {
             </a>
           </nav>
 
-          <a
-            href="#player"
-            className="hidden rounded-full bg-red-600 px-5 py-2.5 text-sm font-bold transition duration-300 hover:scale-105 hover:bg-red-500 md:block"
-          >
-            Watch Live
-          </a>
+          <div className="hidden items-center gap-2.5 md:flex">
+            <a
+              href={authChecked && isAuthenticated ? "/account" : "/login"}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/75 transition duration-300 hover:border-red-500/30 hover:bg-red-600/10 hover:text-white"
+            >
+              {authChecked && isAuthenticated ? "My Account" : "Login"}
+            </a>
+
+            <a
+              href="#player"
+              className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-bold transition duration-300 hover:scale-105 hover:bg-red-500"
+            >
+              Watch Live
+            </a>
+          </div>
 
           <button
             type="button"
@@ -946,6 +1116,10 @@ export default function Home() {
               ["Categories", "#categories"],
               ["About", "#about"],
               ["Watch Live", "#player"],
+              [
+                authChecked && isAuthenticated ? "My Account" : "Login",
+                authChecked && isAuthenticated ? "/account" : "/login",
+              ],
             ].map(([label, href]) => (
               <a
                 key={label}
@@ -1039,7 +1213,19 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="shrink-0">
+                <div className="flex shrink-0 items-center gap-2">
+                  {selectedIsPremium ? (
+                    <span
+                      className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                        selectedHasPremiumAccess
+                          ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+                          : "border-amber-400/25 bg-amber-400/10 text-amber-200"
+                      }`}
+                    >
+                      {selectedHasPremiumAccess ? "Premium Active" : "Premium"}
+                    </span>
+                  ) : null}
+
                   <span
                     className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
                       selectedStatus === "live-youtube" || selectedStatus === "live-official"
@@ -1055,7 +1241,40 @@ export default function Home() {
               </div>
 
               <div className="relative aspect-video min-h-[180px] overflow-hidden rounded-xl bg-black sm:min-h-0 sm:rounded-2xl">
-                {liveVideoId ? (
+                {selectedIsPremiumLocked ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.11),transparent_52%),linear-gradient(145deg,#111,#050505)] px-5 text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-amber-300/25 bg-amber-400/10 text-2xl text-amber-100 shadow-[0_15px_35px_rgba(245,158,11,0.08)] sm:h-20 sm:w-20 sm:text-3xl">
+                      🔒
+                    </div>
+
+                    <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.28em] text-amber-300">
+                      Premium Channel
+                    </p>
+
+                    <h3 className="mt-2 text-xl font-black tracking-tight text-white sm:text-2xl">
+                      Subscription required
+                    </h3>
+
+                    <p className="mt-2 max-w-md text-xs leading-5 text-white/50 sm:text-sm sm:leading-6">
+                      {!subscriptionChecked && isAuthenticated
+                        ? "Checking your VELORA subscription..."
+                        : isAuthenticated
+                          ? "This channel requires an active VELORA premium subscription."
+                          : "Sign in first, then choose a premium plan to unlock this channel."}
+                    </p>
+
+                    <a
+                      href={isAuthenticated ? "/account" : "/login"}
+                      className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full bg-red-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                    >
+                      {!subscriptionChecked && isAuthenticated
+                        ? "Checking Access..."
+                        : isAuthenticated
+                          ? "View Premium Access"
+                          : "Login to Continue"}
+                    </a>
+                  </div>
+                ) : liveVideoId ? (
                   playWithSound ? (
                     <iframe
                       key={`${liveVideoId}-sound`}
@@ -1320,13 +1539,23 @@ export default function Home() {
 
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold leading-5 text-white sm:truncate">{channel.name}</div>
-                  <div className="mt-1 truncate text-[10px] uppercase tracking-[0.18em] text-white/40">
-                    {channel.category}
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="truncate text-[10px] uppercase tracking-[0.18em] text-white/40">
+                      {channel.category}
+                    </span>
+                    {isPremiumChannel(channel) ? (
+                      <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-amber-200">
+                        Premium
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-sm text-white/55 transition group-hover:border-red-500/30 group-hover:bg-red-600/10 group-hover:text-red-200">
-                  ▶
+                  {isPremiumChannel(channel) &&
+                  !hasChannelPremiumAccess(channel, activePlanIds)
+                    ? "🔒"
+                    : "▶"}
                 </span>
               </button>
             ))}
@@ -1358,8 +1587,25 @@ export default function Home() {
               status: hasSource ? "ready" : "coming-soon",
             };
 
-            const buttonText =
-              status.status === "loading" ? "Checking Channel" : "Watch Live";
+            const premium = isPremiumChannel(channel);
+            const hasPremiumAccess = hasChannelPremiumAccess(
+              channel,
+              activePlanIds
+            );
+            const premiumLocked = premium && !hasPremiumAccess;
+            const buttonText = premium
+              ? hasPremiumAccess
+                ? status.status === "loading"
+                  ? "Checking Channel"
+                  : "Watch Premium"
+                : isAuthenticated
+                  ? subscriptionChecked
+                    ? "Premium Access"
+                    : "Checking Access..."
+                  : "Login to Unlock"
+              : status.status === "loading"
+                ? "Checking Channel"
+                : "Watch Live";
             const isFavorited = favorites.includes(channel.id);
 
             return (
@@ -1374,8 +1620,19 @@ export default function Home() {
                 <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-[#161616] via-[#090909] to-black">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.08),transparent_45%)]" />
 
-                  <div className="absolute left-3 top-3 z-20 sm:left-4 sm:top-4">
+                  <div className="absolute left-3 top-3 z-20 flex flex-wrap items-center gap-2 sm:left-4 sm:top-4">
                     <StatusBadge status={status.status} />
+                    {premium ? (
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] backdrop-blur-sm ${
+                          hasPremiumAccess
+                            ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+                            : "border-amber-400/25 bg-amber-400/10 text-amber-200"
+                        }`}
+                      >
+                        {hasPremiumAccess ? "✓ Premium" : "🔒 Premium"}
+                      </span>
+                    ) : null}
                   </div>
 
                   <button
@@ -1415,10 +1672,16 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => selectChannel(channel)}
-                    aria-label={`Open ${channel.name}`}
-                    className="absolute bottom-3 right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/45 text-lg text-white/70 shadow-lg shadow-black/30 transition duration-300 hover:border-red-400/40 hover:bg-red-600 hover:text-white sm:bottom-4 sm:right-4 sm:h-11 sm:w-11"
+                    aria-label={premium ? `Open premium channel ${channel.name}` : `Open ${channel.name}`}
+                    className={`absolute bottom-3 right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border text-lg shadow-lg shadow-black/30 transition duration-300 sm:bottom-4 sm:right-4 sm:h-11 sm:w-11 ${
+                      premiumLocked
+                        ? "border-amber-400/20 bg-amber-400/10 text-amber-100 hover:border-amber-300/40 hover:bg-amber-400/15"
+                        : premium
+                          ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100 hover:border-emerald-300/40 hover:bg-emerald-400/15"
+                          : "border-white/10 bg-black/45 text-white/70 hover:border-red-400/40 hover:bg-red-600 hover:text-white"
+                    }`}
                   >
-                    ▶
+                    {premiumLocked ? "🔒" : "▶"}
                   </button>
                 </div>
 
@@ -1429,11 +1692,25 @@ export default function Home() {
                       <p className="mt-1 text-xs uppercase tracking-[0.22em] text-white/40">{channel.category}</p>
                     </div>
 
-                    {selectedChannel.id === channel.id && (
-                      <span className="rounded-full border border-red-500/30 bg-red-600/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-red-200">
-                        Selected
-                      </span>
-                    )}
+                    <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                      {premium ? (
+                        <span
+                          className={`rounded-full border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${
+                            hasPremiumAccess
+                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                              : "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                          }`}
+                        >
+                          {hasPremiumAccess ? "Premium Active" : "Premium"}
+                        </span>
+                      ) : null}
+
+                      {selectedChannel.id === channel.id ? (
+                        <span className="rounded-full border border-red-500/30 bg-red-600/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-red-200">
+                          Selected
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
                   <p className="mt-3 min-h-0 text-sm leading-6 text-white/60 sm:min-h-[3rem]">
@@ -1444,9 +1721,13 @@ export default function Home() {
                     type="button"
                     onClick={() => selectChannel(channel)}
                     className={`mt-5 min-h-12 w-full rounded-xl border px-4 py-3 text-sm font-bold transition duration-300 ${
-                      status.status === "live-youtube" || status.status === "live-official"
-                        ? "border-red-500/40 bg-red-600 text-white hover:bg-red-500"
-                        : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                      premiumLocked
+                        ? "border-amber-400/20 bg-amber-400/[0.08] text-amber-100 hover:border-amber-300/35 hover:bg-amber-400/[0.12]"
+                        : premium
+                          ? "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-100 hover:border-emerald-300/35 hover:bg-emerald-400/[0.12]"
+                          : status.status === "live-youtube" || status.status === "live-official"
+                          ? "border-red-500/40 bg-red-600 text-white hover:bg-red-500"
+                          : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
                     }`}
                   >
                     {buttonText}

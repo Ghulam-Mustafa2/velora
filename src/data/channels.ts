@@ -11,6 +11,9 @@ export type Channel = {
   thumbnailUrl?: string;
   brandColor?: string;
   comingSoon?: boolean;
+
+  accessType?: "free" | "paid";
+  requiredPlanId?: string;
 };
 
 export const channels: Channel[] = [

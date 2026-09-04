@@ -5,6 +5,62 @@ import { channels as localChannels, type Channel } from "@/data/channels";
 import { createSupabaseAuthBrowserClient } from "@/lib/supabase/auth-client";
 
 type SourceType = "YouTube" | "Official Embed" | "Coming Soon";
+type AccessType = "free" | "paid";
+
+type PlanOption = {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  duration_days: number;
+};
+
+type AdminPlan = PlanOption & {
+  description: string;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+type PlanDraft = {
+  name: string;
+  slug: string;
+  description: string;
+  price: string;
+  durationDays: string;
+  sortOrder: string;
+  isActive: boolean;
+};
+
+type AdminPaymentRequest = {
+  id: string;
+  userId: string;
+  userEmail: string;
+  displayName: string;
+  planId: string;
+  planName: string;
+  paymentMethodId: string;
+  paymentMethodName: string;
+  amount: number;
+  transactionReference: string | null;
+  receiptPath: string | null;
+  receiptUrl: string | null;
+  status: "pending" | "approved" | "rejected";
+  adminNote: string | null;
+  submittedAt: string;
+  reviewedAt: string | null;
+};
+
+type AdminPaymentMethod = {
+  id: string;
+  name: string;
+  slug: string;
+  accountTitle: string;
+  accountNumber: string;
+  iban: string;
+  instructions: string;
+  isActive: boolean;
+  sortOrder: number;
+};
 
 type AdminChannel = {
   id: number;
@@ -18,6 +74,8 @@ type AdminChannel = {
   comingSoon: boolean;
   isActive: boolean;
   updatedAt: string | null;
+  accessType: AccessType;
+  requiredPlanId: string | null;
 };
 
 type ChannelForm = Omit<
@@ -63,6 +121,8 @@ type AdminChannelRow = {
   is_active?: boolean;
   sort_order?: number;
   updated_at?: string | null;
+  access_type?: AccessType | null;
+  required_plan_id?: string | null;
 };
 
 function getSourceType(channel: Channel): SourceType {
@@ -91,6 +151,8 @@ function toAdminChannel(channel: Channel): AdminChannel {
     comingSoon: sourceType === "Coming Soon",
     isActive: true,
     updatedAt: null,
+    accessType: "free",
+    requiredPlanId: null,
   };
 }
 
@@ -123,6 +185,8 @@ function toAdminChannelRow(
     comingSoon: row.coming_soon,
     isActive: row.is_active ?? true,
     updatedAt: row.updated_at ?? null,
+    accessType: row.access_type === "paid" ? "paid" : "free",
+    requiredPlanId: row.required_plan_id ?? null,
   };
 }
 
@@ -136,6 +200,8 @@ const emptyForm: ChannelForm = {
   sourceValue: "",
   logoPath: "",
   comingSoon: false,
+  accessType: "free",
+  requiredPlanId: null,
 };
 
 const defaultSiteSettings: SiteSettings = {
@@ -206,6 +272,7 @@ function ChannelFormModal({
   onLogoUpload,
   isUploadingLogo,
   logoUploadError,
+  plans,
 }: {
   channel: ChannelForm | null;
   onClose: () => void;
@@ -216,9 +283,13 @@ function ChannelFormModal({
   onLogoUpload: (file: File) => Promise<string | null>;
   isUploadingLogo: boolean;
   logoUploadError: string;
+  plans: PlanOption[];
 }) {
   const [logoPreview, setLogoPreview] = useState(
     channel?.logoPath ?? ""
+  );
+  const [accessType, setAccessType] = useState<AccessType>(
+    channel?.accessType ?? "free"
   );
 
   if (!channel) return null;
@@ -294,6 +365,58 @@ function ChannelFormModal({
               className="w-full resize-y rounded-xl border border-white/10 bg-[#171717] px-3 py-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
             />
           </label>
+
+          <div className="rounded-2xl border border-red-500/15 bg-red-600/[0.035] p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-300">
+              Channel access
+            </p>
+            <p className="mt-2 text-xs leading-5 text-white/40">
+              Free channels are available to everyone. Paid channels require an active subscription plan.
+            </p>
+
+            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+              <label className="space-y-2 text-sm text-white/65">
+                Access Type
+                <select
+                  name="accessType"
+                  value={accessType}
+                  onChange={(event) =>
+                    setAccessType(event.target.value as AccessType)
+                  }
+                  className="h-11 w-full rounded-xl border border-white/10 bg-[#171717] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                >
+                  <option value="free">Free</option>
+                  <option value="paid">Paid / Premium</option>
+                </select>
+              </label>
+
+              <label className="space-y-2 text-sm text-white/65">
+                Required Plan
+                <select
+                  name="requiredPlanId"
+                  defaultValue={channel.requiredPlanId ?? ""}
+                  disabled={accessType !== "paid"}
+                  required={accessType === "paid"}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-[#171717] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <option value="">
+                    {accessType === "paid" ? "Select a plan" : "Not required"}
+                  </option>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} — PKR {plan.price} / {plan.duration_days} days
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {accessType === "paid" && plans.length === 0 ? (
+              <p className="mt-3 text-xs text-amber-200/80">
+                No active plans were found. Check the plans table in Supabase before saving a paid channel.
+              </p>
+            ) : null}
+          </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="space-y-2 text-sm text-white/65">
@@ -519,11 +642,207 @@ export default function AdminPage() {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [accountError, setAccountError] = useState("");
+  const [plans, setPlans] = useState<PlanOption[]>([]);
+  const [paymentRequests, setPaymentRequests] =
+    useState<AdminPaymentRequest[]>([]);
+  const [paymentFilter, setPaymentFilter] =
+    useState<"All" | "pending" | "approved" | "rejected">("pending");
+  const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentNotice, setPaymentNotice] = useState("");
+  const [reviewingPaymentId, setReviewingPaymentId] = useState<string | null>(
+    null
+  );
+  const [paymentNotes, setPaymentNotes] = useState<Record<string, string>>({});
+  const [paymentMethods, setPaymentMethods] = useState<AdminPaymentMethod[]>([]);
+  const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(false);
+  const [savingPaymentMethodId, setSavingPaymentMethodId] = useState<string | null>(
+    null
+  );
+  const [paymentMethodError, setPaymentMethodError] = useState("");
+  const [paymentMethodNotice, setPaymentMethodNotice] = useState("");
+
+  const [adminPlans, setAdminPlans] = useState<AdminPlan[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+  const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
+  const [planError, setPlanError] = useState("");
+  const [planNotice, setPlanNotice] = useState("");
+  const [newPlanDraft, setNewPlanDraft] = useState<PlanDraft>({
+    name: "",
+    slug: "",
+    description: "",
+    price: "500",
+    durationDays: "30",
+    sortOrder: "1",
+    isActive: true,
+  });
 
   const authClient = useMemo(
     () => createSupabaseAuthBrowserClient(),
     []
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlans() {
+      setIsLoadingPlans(true);
+      setPlanError("");
+
+      try {
+        const response = await fetch("/api/admin/plans", {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          plans?: AdminPlan[];
+        };
+
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Unable to load subscription plans.");
+        }
+
+        if (!cancelled) {
+          const loadedPlans = Array.isArray(payload.plans) ? payload.plans : [];
+
+          setAdminPlans(loadedPlans);
+          setPlans(
+            loadedPlans
+              .filter((plan) => plan.isActive)
+              .map((plan) => ({
+                id: plan.id,
+                name: plan.name,
+                slug: plan.slug,
+                price: plan.price,
+                duration_days: plan.duration_days,
+              }))
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPlanError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load subscription plans."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPlans(false);
+        }
+      }
+    }
+
+    void loadPlans();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPayments() {
+      setIsLoadingPayments(true);
+      setPaymentError("");
+
+      try {
+        const response = await fetch("/api/admin/payments", {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          paymentRequests?: AdminPaymentRequest[];
+        };
+
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Unable to load payment requests.");
+        }
+
+        if (!cancelled) {
+          setPaymentRequests(
+            Array.isArray(payload.paymentRequests)
+              ? payload.paymentRequests
+              : []
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPaymentError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load payment requests."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPayments(false);
+        }
+      }
+    }
+
+    void loadPayments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPaymentMethods() {
+      setIsLoadingPaymentMethods(true);
+      setPaymentMethodError("");
+
+      try {
+        const response = await fetch("/api/admin/payment-methods", {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          paymentMethods?: AdminPaymentMethod[];
+        };
+
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "Unable to load payment methods.");
+        }
+
+        if (!cancelled) {
+          setPaymentMethods(
+            Array.isArray(payload.paymentMethods)
+              ? payload.paymentMethods
+              : []
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPaymentMethodError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load payment methods."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPaymentMethods(false);
+        }
+      }
+    }
+
+    void loadPaymentMethods();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -683,6 +1002,31 @@ export default function AdminPage() {
       cancelled = true;
     };
   }, []);
+
+  const filteredPaymentRequests = useMemo(() => {
+    if (paymentFilter === "All") {
+      return paymentRequests;
+    }
+
+    return paymentRequests.filter(
+      (request) => request.status === paymentFilter
+    );
+  }, [paymentFilter, paymentRequests]);
+
+  const paymentStats = useMemo(
+    () => ({
+      total: paymentRequests.length,
+      pending: paymentRequests.filter((request) => request.status === "pending")
+        .length,
+      approved: paymentRequests.filter(
+        (request) => request.status === "approved"
+      ).length,
+      rejected: paymentRequests.filter(
+        (request) => request.status === "rejected"
+      ).length,
+    }),
+    [paymentRequests]
+  );
 
   const filteredChannels = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -885,6 +1229,8 @@ export default function AdminPage() {
       sourceValue: channel.sourceValue,
       logoPath: channel.logoPath,
       comingSoon: channel.comingSoon,
+      accessType: channel.accessType,
+      requiredPlanId: channel.requiredPlanId,
     });
   };
 
@@ -965,6 +1311,21 @@ export default function AdminPage() {
     const comingSoon =
       formData.get("comingSoon") === "on" ||
       sourceType === "Coming Soon";
+    const accessType = String(
+      formData.get("accessType") ?? "free"
+    ) as AccessType;
+    const requiredPlanIdValue = String(
+      formData.get("requiredPlanId") ?? ""
+    ).trim();
+    const requiredPlanId =
+      accessType === "paid" && requiredPlanIdValue
+        ? requiredPlanIdValue
+        : null;
+
+    if (accessType === "paid" && !requiredPlanId) {
+      setSaveError("Please select a subscription plan for this paid channel.");
+      return;
+    }
 
     const isYouTubeHandle =
       sourceType === "YouTube" && sourceValue.startsWith("@");
@@ -999,6 +1360,8 @@ export default function AdminPage() {
               : null,
           logoLocal: logoPath || null,
           comingSoon,
+          accessType,
+          requiredPlanId,
         }),
       });
 
@@ -1232,6 +1595,322 @@ export default function AdminPage() {
     }
   }
 
+  function syncActivePlanOptions(nextPlans: AdminPlan[]) {
+    setPlans(
+      nextPlans
+        .filter((plan) => plan.isActive)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((plan) => ({
+          id: plan.id,
+          name: plan.name,
+          slug: plan.slug,
+          price: plan.price,
+          duration_days: plan.duration_days,
+        }))
+    );
+  }
+
+  function updateAdminPlan(
+    planId: string,
+    updates: Partial<AdminPlan>
+  ) {
+    setAdminPlans((current) => {
+      const next = current.map((plan) =>
+        plan.id === planId ? { ...plan, ...updates } : plan
+      );
+
+      syncActivePlanOptions(next);
+      return next;
+    });
+  }
+
+  async function handleCreatePlan() {
+    if (savingPlanId) {
+      return;
+    }
+
+    const name = newPlanDraft.name.trim();
+    const slug = newPlanDraft.slug.trim();
+    const description = newPlanDraft.description.trim();
+    const price = Number(newPlanDraft.price);
+    const durationDays = Number(newPlanDraft.durationDays);
+    const sortOrder = Number(newPlanDraft.sortOrder);
+
+    if (!name) {
+      setPlanError("Plan name is required.");
+      return;
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+      setPlanError("Enter a valid plan amount.");
+      return;
+    }
+
+    if (
+      !Number.isInteger(durationDays) ||
+      durationDays <= 0
+    ) {
+      setPlanError("Plan duration must be at least 1 day.");
+      return;
+    }
+
+    setSavingPlanId("new");
+    setPlanError("");
+    setPlanNotice("");
+
+    try {
+      const response = await fetch("/api/admin/plans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          slug: slug || undefined,
+          description,
+          price,
+          durationDays,
+          sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+          isActive: newPlanDraft.isActive,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        plan?: AdminPlan;
+      };
+
+      if (!response.ok || !payload.ok || !payload.plan) {
+        throw new Error(payload.error || "Unable to create plan.");
+      }
+
+      setAdminPlans((current) => {
+        const next = [...current, payload.plan!].sort(
+          (a, b) => a.sortOrder - b.sortOrder
+        );
+        syncActivePlanOptions(next);
+        return next;
+      });
+
+      setNewPlanDraft({
+        name: "",
+        slug: "",
+        description: "",
+        price: "500",
+        durationDays: "30",
+        sortOrder: String(adminPlans.length + 2),
+        isActive: true,
+      });
+
+      setPlanNotice(`${payload.plan.name} was created successfully.`);
+    } catch (error) {
+      setPlanError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create plan."
+      );
+    } finally {
+      setSavingPlanId(null);
+    }
+  }
+
+  async function handlePlanSave(plan: AdminPlan) {
+    if (savingPlanId) {
+      return;
+    }
+
+    if (!plan.name.trim()) {
+      setPlanError("Plan name is required.");
+      return;
+    }
+
+    if (!Number.isFinite(plan.price) || plan.price < 0) {
+      setPlanError("Enter a valid plan amount.");
+      return;
+    }
+
+    if (!Number.isInteger(plan.duration_days) || plan.duration_days <= 0) {
+      setPlanError("Plan duration must be at least 1 day.");
+      return;
+    }
+
+    setSavingPlanId(plan.id);
+    setPlanError("");
+    setPlanNotice("");
+
+    try {
+      const response = await fetch("/api/admin/plans", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: plan.id,
+          name: plan.name,
+          slug: plan.slug,
+          description: plan.description,
+          price: plan.price,
+          durationDays: plan.duration_days,
+          sortOrder: plan.sortOrder,
+          isActive: plan.isActive,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        plan?: AdminPlan;
+      };
+
+      if (!response.ok || !payload.ok || !payload.plan) {
+        throw new Error(payload.error || "Unable to save plan.");
+      }
+
+      setAdminPlans((current) => {
+        const next = current
+          .map((item) =>
+            item.id === payload.plan?.id ? payload.plan : item
+          )
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+
+        syncActivePlanOptions(next);
+        return next;
+      });
+
+      setPlanNotice(`${payload.plan.name} was saved successfully.`);
+    } catch (error) {
+      setPlanError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save plan."
+      );
+    } finally {
+      setSavingPlanId(null);
+    }
+  }
+
+  async function handlePaymentMethodSave(
+    method: AdminPaymentMethod
+  ) {
+    if (savingPaymentMethodId) {
+      return;
+    }
+
+    setSavingPaymentMethodId(method.id);
+    setPaymentMethodError("");
+    setPaymentMethodNotice("");
+
+    try {
+      const response = await fetch("/api/admin/payment-methods", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: method.id,
+          accountTitle: method.accountTitle,
+          accountNumber: method.accountNumber,
+          iban: method.iban,
+          instructions: method.instructions,
+          isActive: method.isActive,
+          sortOrder: method.sortOrder,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        paymentMethod?: AdminPaymentMethod;
+      };
+
+      if (!response.ok || !payload.ok || !payload.paymentMethod) {
+        throw new Error(payload.error || "Unable to save payment method.");
+      }
+
+      setPaymentMethods((current) =>
+        current.map((item) =>
+          item.id === payload.paymentMethod?.id
+            ? payload.paymentMethod
+            : item
+        )
+      );
+
+      setPaymentMethodNotice(
+        `${payload.paymentMethod.name} payment details were saved.`
+      );
+    } catch (error) {
+      setPaymentMethodError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save payment method."
+      );
+    } finally {
+      setSavingPaymentMethodId(null);
+    }
+  }
+
+  async function handlePaymentReview(
+    paymentRequestId: string,
+    decision: "approved" | "rejected"
+  ) {
+    if (reviewingPaymentId) {
+      return;
+    }
+
+    setReviewingPaymentId(paymentRequestId);
+    setPaymentError("");
+    setPaymentNotice("");
+
+    try {
+      const response = await fetch("/api/admin/payments", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: paymentRequestId,
+          decision,
+          adminNote: paymentNotes[paymentRequestId]?.trim() || null,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        paymentRequest?: AdminPaymentRequest;
+        message?: string;
+      };
+
+      if (!response.ok || !payload.ok || !payload.paymentRequest) {
+        throw new Error(payload.error || "Unable to review payment request.");
+      }
+
+      setPaymentRequests((current) =>
+        current.map((request) =>
+          request.id === payload.paymentRequest?.id
+            ? payload.paymentRequest
+            : request
+        )
+      );
+
+      setPaymentNotice(
+        payload.message ||
+          (decision === "approved"
+            ? "Payment approved and subscription updated."
+            : "Payment request rejected.")
+      );
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error
+          ? error.message
+          : "Unable to review payment request."
+      );
+    } finally {
+      setReviewingPaymentId(null);
+    }
+  }
+
   async function handleSettingsSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
@@ -1352,6 +2031,8 @@ export default function AdminPage() {
               "Channels",
               "Categories",
               "Streaming",
+              "Plans",
+              "Payments",
               "Settings",
             ].map((item) => (
               <button
@@ -1412,9 +2093,13 @@ export default function AdminPage() {
                       ? "Channel management"
                       : activeSection === "Streaming"
                         ? "Streaming sources"
-                        : activeSection === "Settings"
-                          ? "Site settings"
-                          : activeSection}
+                        : activeSection === "Plans"
+                          ? "Subscription plans"
+                          : activeSection === "Payments"
+                            ? "Payment reviews"
+                            : activeSection === "Settings"
+                              ? "Site settings"
+                              : activeSection}
                 </h1>
               </div>
 
@@ -1917,7 +2602,7 @@ export default function AdminPage() {
                   </section>
                 </div>
 
-                <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                   {[
                     {
                       label: "Manage channels",
@@ -1933,6 +2618,16 @@ export default function AdminPage() {
                       label: "Streaming sources",
                       detail: `${streamingStats.missing} need attention`,
                       section: "Streaming",
+                    },
+                    {
+                      label: "Manage plans",
+                      detail: `${adminPlans.filter((plan) => plan.isActive).length} active`,
+                      section: "Plans",
+                    },
+                    {
+                      label: "Review payments",
+                      detail: `${paymentStats.pending} pending`,
+                      section: "Payments",
                     },
                     {
                       label: "Site settings",
@@ -2035,9 +2730,10 @@ export default function AdminPage() {
                 ) : null}
 
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a]">
-                  <div className="hidden grid-cols-[minmax(220px,1.4fr)_1fr_1fr_1fr_150px] gap-4 border-b border-white/10 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-white/35 md:grid">
+                  <div className="hidden grid-cols-[minmax(210px,1.35fr)_0.8fr_0.8fr_0.9fr_0.9fr_150px] gap-4 border-b border-white/10 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-white/35 md:grid">
                     <span>Channel</span>
                     <span>Category</span>
+                    <span>Access</span>
                     <span>Source type</span>
                     <span>Status</span>
                     <span>Actions</span>
@@ -2047,7 +2743,7 @@ export default function AdminPage() {
                     {filteredChannels.map((channel) => (
                       <div
                         key={channel.databaseId ?? channel.id}
-                        className="grid gap-4 px-4 py-4 transition hover:bg-white/[0.02] md:grid-cols-[minmax(220px,1.4fr)_1fr_1fr_1fr_150px] md:items-center md:px-5"
+                        className="grid gap-4 px-4 py-4 transition hover:bg-white/[0.02] md:grid-cols-[minmax(210px,1.35fr)_0.8fr_0.8fr_0.9fr_0.9fr_150px] md:items-center md:px-5"
                       >
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-xs font-black text-white/70">
@@ -2082,6 +2778,17 @@ export default function AdminPage() {
                             Category
                           </span>
                           {channel.category}
+                        </div>
+
+                        <div>
+                          <span className="mr-2 text-xs text-white/35 md:hidden">
+                            Access
+                          </span>
+                          <ConfigBadge
+                            tone={channel.accessType === "paid" ? "amber" : "neutral"}
+                          >
+                            {channel.accessType === "paid" ? "Premium" : "Free"}
+                          </ConfigBadge>
                         </div>
 
                         <div>
@@ -2609,6 +3316,805 @@ export default function AdminPage() {
                   </p>
                 </div>
               </>
+            ) : activeSection === "Plans" ? (
+              <div className="space-y-5">
+                <section className="rounded-2xl border border-white/10 bg-[#0b0b0b] p-5 sm:p-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-red-400">
+                    Subscription catalogue
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
+                    Plans management
+                  </h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-white/45">
+                    Create your own plans with any price and duration. For
+                    example PKR 500 for 30 days, PKR 1200 for 90 days, or any
+                    combination you want.
+                  </p>
+                </section>
+
+                {planNotice ? (
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-100/80">
+                    {planNotice}
+                  </div>
+                ) : null}
+
+                {planError ? (
+                  <div className="rounded-xl border border-red-500/20 bg-red-600/5 px-4 py-3 text-sm text-red-200">
+                    {planError}
+                  </div>
+                ) : null}
+
+                <section className="rounded-2xl border border-red-500/15 bg-red-600/[0.025] p-5 sm:p-6">
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-300">
+                      New plan
+                    </p>
+                    <h3 className="text-xl font-black text-white">
+                      Create subscription plan
+                    </h3>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <label className="space-y-2 text-sm text-white/60">
+                      Plan name
+                      <input
+                        value={newPlanDraft.name}
+                        onChange={(event) =>
+                          setNewPlanDraft((current) => ({
+                            ...current,
+                            name: event.target.value,
+                          }))
+                        }
+                        placeholder="Premium Quarterly"
+                        className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                      />
+                    </label>
+
+                    <label className="space-y-2 text-sm text-white/60">
+                      Slug
+                      <input
+                        value={newPlanDraft.slug}
+                        onChange={(event) =>
+                          setNewPlanDraft((current) => ({
+                            ...current,
+                            slug: event.target.value,
+                          }))
+                        }
+                        placeholder="premium-quarterly (optional)"
+                        className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                      />
+                    </label>
+
+                    <label className="space-y-2 text-sm text-white/60">
+                      Amount (PKR)
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={newPlanDraft.price}
+                        onChange={(event) =>
+                          setNewPlanDraft((current) => ({
+                            ...current,
+                            price: event.target.value,
+                          }))
+                        }
+                        placeholder="1200"
+                        className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                      />
+                    </label>
+
+                    <label className="space-y-2 text-sm text-white/60">
+                      Duration (days)
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={newPlanDraft.durationDays}
+                        onChange={(event) =>
+                          setNewPlanDraft((current) => ({
+                            ...current,
+                            durationDays: event.target.value,
+                          }))
+                        }
+                        placeholder="90"
+                        className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                      />
+                    </label>
+
+                    <label className="space-y-2 text-sm text-white/60">
+                      Sort order
+                      <input
+                        type="number"
+                        value={newPlanDraft.sortOrder}
+                        onChange={(event) =>
+                          setNewPlanDraft((current) => ({
+                            ...current,
+                            sortOrder: event.target.value,
+                          }))
+                        }
+                        className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                      />
+                    </label>
+
+                    <label className="flex items-end">
+                      <span className="flex h-11 w-full items-center gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 text-sm text-white/60">
+                        <input
+                          type="checkbox"
+                          checked={newPlanDraft.isActive}
+                          onChange={(event) =>
+                            setNewPlanDraft((current) => ({
+                              ...current,
+                              isActive: event.target.checked,
+                            }))
+                          }
+                          className="h-4 w-4 accent-red-600"
+                        />
+                        Active immediately
+                      </span>
+                    </label>
+                  </div>
+
+                  <label className="mt-4 block space-y-2 text-sm text-white/60">
+                    Description
+                    <textarea
+                      rows={3}
+                      value={newPlanDraft.description}
+                      onChange={(event) =>
+                        setNewPlanDraft((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      placeholder="90 days of premium VELORA channel access."
+                      className="w-full resize-y rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleCreatePlan()}
+                    disabled={Boolean(savingPlanId)}
+                    className="mt-5 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingPlanId === "new" ? "Creating..." : "Create Plan"}
+                  </button>
+                </section>
+
+                <section className="rounded-2xl border border-white/10 bg-[#0a0a0a] p-5 sm:p-6">
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/35">
+                        Existing plans
+                      </p>
+                      <h3 className="mt-2 text-xl font-black text-white">
+                        Edit price and duration anytime
+                      </h3>
+                    </div>
+
+                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/45">
+                      {adminPlans.length} plans
+                    </span>
+                  </div>
+
+                  {isLoadingPlans ? (
+                    <div className="mt-6 rounded-xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/40">
+                      Loading plans...
+                    </div>
+                  ) : adminPlans.length === 0 ? (
+                    <div className="mt-6 rounded-xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/40">
+                      No plans yet. Create your first plan above.
+                    </div>
+                  ) : (
+                    <div className="mt-6 grid gap-4 xl:grid-cols-2">
+                      {adminPlans.map((plan) => (
+                        <article
+                          key={plan.id}
+                          className="rounded-2xl border border-white/10 bg-white/[0.02] p-5"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-lg font-black text-white">
+                                {plan.name || "Untitled plan"}
+                              </p>
+                              <p className="mt-1 text-xs text-white/35">
+                                {plan.slug}
+                              </p>
+                            </div>
+
+                            <label className="flex items-center gap-2 text-xs font-semibold text-white/55">
+                              <input
+                                type="checkbox"
+                                checked={plan.isActive}
+                                onChange={(event) =>
+                                  updateAdminPlan(plan.id, {
+                                    isActive: event.target.checked,
+                                  })
+                                }
+                                className="h-4 w-4 accent-red-600"
+                              />
+                              Active
+                            </label>
+                          </div>
+
+                          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                            <label className="space-y-2 text-sm text-white/60">
+                              Plan name
+                              <input
+                                value={plan.name}
+                                onChange={(event) =>
+                                  updateAdminPlan(plan.id, {
+                                    name: event.target.value,
+                                  })
+                                }
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <label className="space-y-2 text-sm text-white/60">
+                              Slug
+                              <input
+                                value={plan.slug}
+                                onChange={(event) =>
+                                  updateAdminPlan(plan.id, {
+                                    slug: event.target.value,
+                                  })
+                                }
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <label className="space-y-2 text-sm text-white/60">
+                              Amount (PKR)
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={plan.price}
+                                onChange={(event) =>
+                                  updateAdminPlan(plan.id, {
+                                    price: Number(event.target.value) || 0,
+                                  })
+                                }
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <label className="space-y-2 text-sm text-white/60">
+                              Duration (days)
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={plan.duration_days}
+                                onChange={(event) =>
+                                  updateAdminPlan(plan.id, {
+                                    duration_days:
+                                      Number(event.target.value) || 1,
+                                  })
+                                }
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <label className="space-y-2 text-sm text-white/60">
+                              Sort order
+                              <input
+                                type="number"
+                                value={plan.sortOrder}
+                                onChange={(event) =>
+                                  updateAdminPlan(plan.id, {
+                                    sortOrder:
+                                      Number(event.target.value) || 0,
+                                  })
+                                }
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <div className="rounded-xl border border-red-500/15 bg-red-600/[0.035] p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-red-300">
+                                Viewer price
+                              </p>
+                              <p className="mt-2 text-xl font-black text-white">
+                                PKR {plan.price}
+                              </p>
+                              <p className="mt-1 text-xs text-white/45">
+                                {plan.duration_days} days access
+                              </p>
+                            </div>
+                          </div>
+
+                          <label className="mt-4 block space-y-2 text-sm text-white/60">
+                            Description
+                            <textarea
+                              rows={3}
+                              value={plan.description}
+                              onChange={(event) =>
+                                updateAdminPlan(plan.id, {
+                                  description: event.target.value,
+                                })
+                              }
+                              className="w-full resize-y rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                            />
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => void handlePlanSave(plan)}
+                            disabled={Boolean(savingPlanId)}
+                            className="mt-5 w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {savingPlanId === plan.id
+                              ? "Saving..."
+                              : `Save ${plan.name || "Plan"}`}
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <div className="rounded-2xl border border-amber-400/15 bg-amber-400/[0.035] px-5 py-4 text-xs leading-5 text-amber-100/65">
+                  Deactivating a plan hides it from new purchases. Existing
+                  subscriptions and historical payment requests are kept
+                  safely, so referenced plans are not deleted.
+                </div>
+              </div>
+            ) : activeSection === "Payments" ? (
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-white/10 bg-[#0b0b0b] p-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.22em] text-red-400">
+                        Manual payments
+                      </p>
+                      <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
+                        Payment review queue
+                      </h2>
+                      <p className="mt-2 max-w-3xl text-sm leading-6 text-white/45">
+                        Review user receipts, transaction references and plan
+                        details. Approving a request activates or extends the
+                        matching premium subscription.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {(["All", "pending", "approved", "rejected"] as const).map(
+                        (filter) => (
+                          <button
+                            key={filter}
+                            type="button"
+                            onClick={() => setPaymentFilter(filter)}
+                            className={`rounded-full border px-3 py-2 text-xs font-semibold capitalize transition ${
+                              paymentFilter === filter
+                                ? "border-red-500/30 bg-red-600 text-white"
+                                : "border-white/10 bg-white/[0.03] text-white/55 hover:border-white/20 hover:text-white"
+                            }`}
+                          >
+                            {filter}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatCard
+                    label="Total requests"
+                    value={paymentStats.total}
+                    detail="all time"
+                  />
+                  <StatCard
+                    label="Pending"
+                    value={paymentStats.pending}
+                    detail="needs review"
+                  />
+                  <StatCard
+                    label="Approved"
+                    value={paymentStats.approved}
+                    detail="accepted"
+                  />
+                  <StatCard
+                    label="Rejected"
+                    value={paymentStats.rejected}
+                    detail="declined"
+                  />
+                </div>
+
+                {paymentNotice ? (
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-100/80">
+                    {paymentNotice}
+                  </div>
+                ) : null}
+
+                {paymentError ? (
+                  <div className="rounded-xl border border-red-500/20 bg-red-600/5 px-4 py-3 text-sm text-red-200">
+                    {paymentError}
+                  </div>
+                ) : null}
+
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a]">
+                  {isLoadingPayments ? (
+                    <div className="px-5 py-14 text-center text-sm text-white/45">
+                      Loading payment requests...
+                    </div>
+                  ) : filteredPaymentRequests.length === 0 ? (
+                    <div className="px-5 py-14 text-center">
+                      <p className="text-lg font-bold text-white">
+                        No payment requests found
+                      </p>
+                      <p className="mt-2 text-sm text-white/45">
+                        New user submissions will appear here for review.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-white/10">
+                      {filteredPaymentRequests.map((request) => {
+                        const statusClass =
+                          request.status === "approved"
+                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                            : request.status === "rejected"
+                              ? "border-red-500/20 bg-red-500/10 text-red-300"
+                              : "border-amber-500/20 bg-amber-500/10 text-amber-200";
+
+                        return (
+                          <article key={request.id} className="p-5 sm:p-6">
+                            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-lg font-black text-white">
+                                    {request.displayName || "VELORA Viewer"}
+                                  </h3>
+                                  <span
+                                    className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${statusClass}`}
+                                  >
+                                    {request.status}
+                                  </span>
+                                </div>
+
+                                <p className="mt-1 break-all text-sm text-white/45">
+                                  {request.userEmail || "No email"}
+                                </p>
+
+                                <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/30">
+                                      Plan
+                                    </p>
+                                    <p className="mt-2 font-semibold text-white/80">
+                                      {request.planName}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/30">
+                                      Method
+                                    </p>
+                                    <p className="mt-2 font-semibold text-white/80">
+                                      {request.paymentMethodName}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/30">
+                                      Amount
+                                    </p>
+                                    <p className="mt-2 font-semibold text-white/80">
+                                      PKR {request.amount}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/30">
+                                      Reference
+                                    </p>
+                                    <p className="mt-2 break-all font-semibold text-white/80">
+                                      {request.transactionReference || "—"}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <p className="mt-4 text-xs text-white/35">
+                                  Submitted:{" "}
+                                  {new Date(request.submittedAt).toLocaleString(
+                                    "en-PK"
+                                  )}
+                                </p>
+                              </div>
+
+                              <div className="w-full shrink-0 xl:w-80">
+                                {request.receiptUrl ? (
+                                  <a
+                                    href={request.receiptUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={request.receiptUrl}
+                                      alt="Payment receipt"
+                                      className="h-44 w-full object-contain"
+                                    />
+                                    <div className="border-t border-white/10 px-4 py-3 text-center text-xs font-semibold text-white/60">
+                                      Open private receipt
+                                    </div>
+                                  </a>
+                                ) : (
+                                  <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-10 text-center text-sm text-white/35">
+                                    Receipt unavailable
+                                  </div>
+                                )}
+
+                                {request.status === "pending" ? (
+                                  <div className="mt-4 space-y-3">
+                                    <textarea
+                                      value={paymentNotes[request.id] ?? ""}
+                                      onChange={(event) =>
+                                        setPaymentNotes((current) => ({
+                                          ...current,
+                                          [request.id]: event.target.value,
+                                        }))
+                                      }
+                                      rows={3}
+                                      maxLength={500}
+                                      placeholder="Optional admin note..."
+                                      className="w-full resize-y rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                                    />
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void handlePaymentReview(
+                                            request.id,
+                                            "rejected"
+                                          )
+                                        }
+                                        disabled={Boolean(reviewingPaymentId)}
+                                        className="rounded-xl border border-red-500/20 bg-red-600/[0.06] px-3 py-2.5 text-sm font-bold text-red-200 transition hover:bg-red-600/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {reviewingPaymentId === request.id
+                                          ? "Saving..."
+                                          : "Reject"}
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void handlePaymentReview(
+                                            request.id,
+                                            "approved"
+                                          )
+                                        }
+                                        disabled={Boolean(reviewingPaymentId)}
+                                        className="rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {reviewingPaymentId === request.id
+                                          ? "Saving..."
+                                          : "Approve"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/45">
+                                    {request.adminNote
+                                      ? `Admin note: ${request.adminNote}`
+                                      : request.status === "approved"
+                                        ? "This payment has been approved."
+                                        : "This payment has been rejected."}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <section className="rounded-2xl border border-white/10 bg-[#0a0a0a] p-5 sm:p-6">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.22em] text-red-400">
+                        Payment methods
+                      </p>
+                      <h3 className="mt-2 text-xl font-black text-white">
+                        Manage Easypaisa, JazzCash and bank details
+                      </h3>
+                      <p className="mt-2 max-w-3xl text-sm leading-6 text-white/45">
+                        These details are shown to viewers on the account payment form.
+                        Inactive methods disappear from the public payment selector.
+                      </p>
+                    </div>
+                  </div>
+
+                  {paymentMethodNotice ? (
+                    <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-100/80">
+                      {paymentMethodNotice}
+                    </div>
+                  ) : null}
+
+                  {paymentMethodError ? (
+                    <div className="mt-5 rounded-xl border border-red-500/20 bg-red-600/5 px-4 py-3 text-sm text-red-200">
+                      {paymentMethodError}
+                    </div>
+                  ) : null}
+
+                  {isLoadingPaymentMethods ? (
+                    <div className="mt-6 rounded-xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/40">
+                      Loading payment methods...
+                    </div>
+                  ) : (
+                    <div className="mt-6 grid gap-4 xl:grid-cols-3">
+                      {paymentMethods.map((method) => (
+                        <div
+                          key={method.id}
+                          className="rounded-2xl border border-white/10 bg-white/[0.02] p-5"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-lg font-black text-white">
+                                {method.name}
+                              </p>
+                              <p className="mt-1 text-xs text-white/35">
+                                {method.slug}
+                              </p>
+                            </div>
+
+                            <label className="flex items-center gap-2 text-xs font-semibold text-white/55">
+                              <input
+                                type="checkbox"
+                                checked={method.isActive}
+                                onChange={(event) =>
+                                  setPaymentMethods((current) =>
+                                    current.map((item) =>
+                                      item.id === method.id
+                                        ? {
+                                            ...item,
+                                            isActive: event.target.checked,
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                                className="h-4 w-4 accent-red-600"
+                              />
+                              Active
+                            </label>
+                          </div>
+
+                          <div className="mt-5 space-y-4">
+                            <label className="block space-y-2 text-sm text-white/60">
+                              Account title
+                              <input
+                                value={method.accountTitle}
+                                onChange={(event) =>
+                                  setPaymentMethods((current) =>
+                                    current.map((item) =>
+                                      item.id === method.id
+                                        ? {
+                                            ...item,
+                                            accountTitle: event.target.value,
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                                placeholder="Example: Ghulam Mustafa"
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <label className="block space-y-2 text-sm text-white/60">
+                              Account number
+                              <input
+                                value={method.accountNumber}
+                                onChange={(event) =>
+                                  setPaymentMethods((current) =>
+                                    current.map((item) =>
+                                      item.id === method.id
+                                        ? {
+                                            ...item,
+                                            accountNumber: event.target.value,
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                                placeholder="Mobile wallet or bank account number"
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <label className="block space-y-2 text-sm text-white/60">
+                              IBAN
+                              <input
+                                value={method.iban}
+                                onChange={(event) =>
+                                  setPaymentMethods((current) =>
+                                    current.map((item) =>
+                                      item.id === method.id
+                                        ? {
+                                            ...item,
+                                            iban: event.target.value,
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                                placeholder="Optional — mainly for bank transfer"
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <label className="block space-y-2 text-sm text-white/60">
+                              Instructions
+                              <textarea
+                                value={method.instructions}
+                                onChange={(event) =>
+                                  setPaymentMethods((current) =>
+                                    current.map((item) =>
+                                      item.id === method.id
+                                        ? {
+                                            ...item,
+                                            instructions: event.target.value,
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                                rows={4}
+                                maxLength={500}
+                                placeholder="Tell the viewer how to send payment."
+                                className="w-full resize-y rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <label className="block space-y-2 text-sm text-white/60">
+                              Sort order
+                              <input
+                                type="number"
+                                value={method.sortOrder}
+                                onChange={(event) =>
+                                  setPaymentMethods((current) =>
+                                    current.map((item) =>
+                                      item.id === method.id
+                                        ? {
+                                            ...item,
+                                            sortOrder:
+                                              Number(event.target.value) || 0,
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                                className="h-11 w-full rounded-xl border border-white/10 bg-[#151515] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20"
+                              />
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={() => void handlePaymentMethodSave(method)}
+                              disabled={Boolean(savingPaymentMethodId)}
+                              className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {savingPaymentMethodId === method.id
+                                ? "Saving..."
+                                : `Save ${method.name}`}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <div className="rounded-2xl border border-white/10 bg-[#0a0a0a] px-5 py-4 text-xs leading-5 text-white/40">
+                  Receipt links are temporary signed URLs generated by the
+                  protected admin API. The payment-receipts bucket remains
+                  private.
+                </div>
+              </div>
             ) : activeSection === "Settings" ? (
               <form onSubmit={handleSettingsSubmit} className="space-y-5">
                 <div className="rounded-2xl border border-white/10 bg-[#0b0b0b] p-5">
@@ -2907,6 +4413,7 @@ export default function AdminPage() {
         onLogoUpload={handleLogoUpload}
         isUploadingLogo={isUploadingLogo}
         logoUploadError={logoUploadError}
+        plans={plans}
       />
     </main>
   );

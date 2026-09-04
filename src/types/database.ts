@@ -9,6 +9,11 @@ export type ChannelRow = {
   official_embed_url: string | null;
   logo_local: string | null;
   coming_soon: boolean;
+
+  // Premium access
+  access_type: "free" | "paid";
+  required_plan_id: string | null;
+
   is_active: boolean;
   sort_order: number;
   created_at: string;
@@ -20,17 +25,29 @@ export type Database = {
     Tables: {
       channels: {
         Row: ChannelRow;
-        Insert: Omit<ChannelRow, "id" | "created_at" | "updated_at"> & {
+
+        Insert: Omit<
+          ChannelRow,
+          "id" | "created_at" | "updated_at"
+        > & {
           id?: string;
           created_at?: string;
           updated_at?: string;
         };
-        Update: Partial<Omit<ChannelRow, "id" | "created_at" | "updated_at">> & {
+
+        Update: Partial<
+          Omit<
+            ChannelRow,
+            "id" | "created_at" | "updated_at"
+          >
+        > & {
           updated_at?: string;
         };
+
         Relationships: [];
       };
     };
+
     Views: Record<string, never>;
     Functions: Record<string, never>;
     Enums: Record<string, never>;

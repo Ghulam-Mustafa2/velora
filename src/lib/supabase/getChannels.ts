@@ -1,4 +1,8 @@
-import { channels as localChannels, type Channel } from "@/data/channels";
+import {
+  channels as localChannels,
+  type Channel,
+} from "@/data/channels";
+
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { ChannelRow } from "@/types/database";
 
@@ -12,11 +16,28 @@ function mapRowToChannel(row: ChannelRow): Channel {
     name: row.name,
     category: row.category,
     description: row.description,
-    youtubeChannelId: row.youtube_channel_id ?? undefined,
-    youtubeHandle: row.youtube_handle ?? undefined,
-    officialEmbedUrl: row.official_embed_url ?? undefined,
-    logoLocal: row.logo_local ?? undefined,
+
+    youtubeChannelId:
+      row.youtube_channel_id ?? undefined,
+
+    youtubeHandle:
+      row.youtube_handle ?? undefined,
+
+    officialEmbedUrl:
+      row.official_embed_url ?? undefined,
+
+    logoLocal:
+      row.logo_local ?? undefined,
+
     comingSoon: row.coming_soon,
+
+    accessType:
+      row.access_type === "paid"
+        ? "paid"
+        : "free",
+
+    requiredPlanId:
+      row.required_plan_id ?? undefined,
   };
 }
 
@@ -24,7 +45,10 @@ export async function getChannels(): Promise<Channel[]> {
   const supabase = getSupabaseClient();
 
   if (!supabase) {
-    return localChannels;
+    return localChannels.map((channel) => ({
+      ...channel,
+      accessType: channel.accessType ?? "free",
+    }));
   }
 
   try {
@@ -32,16 +56,34 @@ export async function getChannels(): Promise<Channel[]> {
       .from("channels")
       .select("*")
       .eq("is_active", true)
-      .order("sort_order", { ascending: true });
+      .order("sort_order", {
+        ascending: true,
+      });
 
     if (error || !data) {
-      console.warn("[VELORA] Supabase channel read failed, using local fallback.");
-      return localChannels;
+      console.warn(
+        "[VELORA] Supabase channel read failed, using local fallback."
+      );
+
+      return localChannels.map((channel) => ({
+        ...channel,
+        accessType:
+          channel.accessType ?? "free",
+      }));
     }
 
-    return (data as ChannelRow[]).map(mapRowToChannel);
+    return (data as ChannelRow[]).map(
+      mapRowToChannel
+    );
   } catch {
-    console.warn("[VELORA] Supabase unavailable, using local fallback.");
-    return localChannels;
+    console.warn(
+      "[VELORA] Supabase unavailable, using local fallback."
+    );
+
+    return localChannels.map((channel) => ({
+      ...channel,
+      accessType:
+        channel.accessType ?? "free",
+    }));
   }
 }
