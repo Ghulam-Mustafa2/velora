@@ -14,6 +14,7 @@ export type Channel = {
 
   accessType?: "free" | "paid";
   requiredPlanId?: string;
+  requiredPlanName?: string;
 };
 
 export const channels: Channel[] = [

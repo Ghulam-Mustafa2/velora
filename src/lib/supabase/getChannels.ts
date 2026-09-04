@@ -6,7 +6,15 @@ import {
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { ChannelRow } from "@/types/database";
 
-function mapRowToChannel(row: ChannelRow): Channel {
+type PlanNameRow = {
+  id: string;
+  name: string;
+};
+
+function mapRowToChannel(
+  row: ChannelRow,
+  planNames: Map<string, string>
+): Channel {
   const localMatch = localChannels.find(
     (channel) => channel.name === row.name
   );
@@ -38,6 +46,11 @@ function mapRowToChannel(row: ChannelRow): Channel {
 
     requiredPlanId:
       row.required_plan_id ?? undefined,
+
+    requiredPlanName:
+      row.required_plan_id
+        ? planNames.get(row.required_plan_id)
+        : undefined,
   };
 }
 
@@ -67,13 +80,38 @@ export async function getChannels(): Promise<Channel[]> {
 
       return localChannels.map((channel) => ({
         ...channel,
-        accessType:
-          channel.accessType ?? "free",
+        accessType: channel.accessType ?? "free",
       }));
     }
 
-    return (data as ChannelRow[]).map(
-      mapRowToChannel
+    const rows = data as ChannelRow[];
+
+    const requiredPlanIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.required_plan_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    const planNames = new Map<string, string>();
+
+    if (requiredPlanIds.length > 0) {
+      const { data: planData, error: planError } =
+        await supabase
+          .from("plans")
+          .select("id, name")
+          .in("id", requiredPlanIds);
+
+      if (!planError && planData) {
+        (planData as PlanNameRow[]).forEach((plan) => {
+          planNames.set(plan.id, plan.name);
+        });
+      }
+    }
+
+    return rows.map((row) =>
+      mapRowToChannel(row, planNames)
     );
   } catch {
     console.warn(
@@ -82,8 +120,7 @@ export async function getChannels(): Promise<Channel[]> {
 
     return localChannels.map((channel) => ({
       ...channel,
-      accessType:
-        channel.accessType ?? "free",
+      accessType: channel.accessType ?? "free",
     }));
   }
 }

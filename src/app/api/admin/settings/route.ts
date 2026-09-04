@@ -15,6 +15,9 @@ const DEFAULT_SETTINGS = {
   maintenance_mode: false,
   global_notice_enabled: false,
   global_notice: "",
+  premium_lock_title: "Subscription required",
+  premium_lock_message:
+    "This channel requires the {plan_name} plan to watch live.",
 };
 
 async function ensureSettingsRow() {
@@ -42,17 +45,28 @@ async function ensureSettingsRow() {
 export async function GET() {
   try {
     const user = await requireAdmin();
+
     if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const settings = await ensureSettingsRow();
-    return NextResponse.json({ ok: true, settings });
+
+    return NextResponse.json({
+      ok: true,
+      settings,
+    });
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Unknown server error",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown server error",
       },
       { status: 500 }
     );
@@ -62,8 +76,12 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const user = await requireAdmin();
+
     if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const body = (await request.json()) as {
@@ -76,38 +94,95 @@ export async function PATCH(request: Request) {
       maintenanceMode?: boolean;
       globalNoticeEnabled?: boolean;
       globalNotice?: string;
+      premiumLockTitle?: string;
+      premiumLockMessage?: string;
     };
 
     const updates = {
-      site_title: body.siteTitle?.trim() || DEFAULT_SETTINGS.site_title,
-      tagline: body.tagline?.trim() || DEFAULT_SETTINGS.tagline,
-      hero_heading: body.heroHeading?.trim() || DEFAULT_SETTINGS.hero_heading,
-      hero_subheading: body.heroSubheading?.trim() || DEFAULT_SETTINGS.hero_subheading,
-      default_category: body.defaultCategory?.trim() || DEFAULT_SETTINGS.default_category,
-      footer_text: body.footerText?.trim() || DEFAULT_SETTINGS.footer_text,
-      maintenance_mode: Boolean(body.maintenanceMode),
-      global_notice_enabled: Boolean(body.globalNoticeEnabled),
-      global_notice: body.globalNotice?.trim() || "",
+      site_title:
+        body.siteTitle?.trim() ||
+        DEFAULT_SETTINGS.site_title,
+
+      tagline:
+        body.tagline?.trim() ||
+        DEFAULT_SETTINGS.tagline,
+
+      hero_heading:
+        body.heroHeading?.trim() ||
+        DEFAULT_SETTINGS.hero_heading,
+
+      hero_subheading:
+        body.heroSubheading?.trim() ||
+        DEFAULT_SETTINGS.hero_subheading,
+
+      default_category:
+        body.defaultCategory?.trim() ||
+        DEFAULT_SETTINGS.default_category,
+
+      footer_text:
+        body.footerText?.trim() ||
+        DEFAULT_SETTINGS.footer_text,
+
+      maintenance_mode: Boolean(
+        body.maintenanceMode
+      ),
+
+      global_notice_enabled: Boolean(
+        body.globalNoticeEnabled
+      ),
+
+      global_notice:
+        body.globalNotice?.trim() || "",
+
+      premium_lock_title:
+        body.premiumLockTitle?.trim() ||
+        DEFAULT_SETTINGS.premium_lock_title,
+
+      premium_lock_message:
+        body.premiumLockMessage?.trim() ||
+        DEFAULT_SETTINGS.premium_lock_message,
+
       updated_at: new Date().toISOString(),
     };
 
     const supabase = getSupabaseAdminClient();
+
     const { data, error } = await supabase
       .from("site_settings")
-      .upsert({ id: SETTINGS_ID, ...updates }, { onConflict: "id" })
+      .upsert(
+        {
+          id: SETTINGS_ID,
+          ...updates,
+        },
+        {
+          onConflict: "id",
+        }
+      )
       .select("*")
       .single();
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: error.message,
+        },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ ok: true, settings: data });
+    return NextResponse.json({
+      ok: true,
+      settings: data,
+    });
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Unknown server error",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown server error",
       },
       { status: 500 }
     );

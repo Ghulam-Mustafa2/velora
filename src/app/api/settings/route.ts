@@ -15,6 +15,9 @@ const DEFAULT_SETTINGS = {
   maintenance_mode: false,
   global_notice_enabled: false,
   global_notice: "",
+  premium_lock_title: "Subscription required",
+  premium_lock_message:
+    "This channel requires the {plan_name} plan to watch live.",
 };
 
 export async function GET() {
@@ -24,7 +27,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("site_settings")
       .select(
-        "site_title, tagline, hero_heading, hero_subheading, default_category, footer_text, maintenance_mode, global_notice_enabled, global_notice"
+        "site_title, tagline, hero_heading, hero_subheading, default_category, footer_text, maintenance_mode, global_notice_enabled, global_notice, premium_lock_title, premium_lock_message"
       )
       .eq("id", SETTINGS_ID)
       .maybeSingle();

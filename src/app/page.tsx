@@ -44,6 +44,8 @@ type PublicSiteSettings = {
   maintenanceMode: boolean;
   globalNoticeEnabled: boolean;
   globalNotice: string;
+  premiumLockTitle: string;
+  premiumLockMessage: string;
 };
 
 type PublicSiteSettingsRow = {
@@ -56,6 +58,8 @@ type PublicSiteSettingsRow = {
   maintenance_mode?: boolean | null;
   global_notice_enabled?: boolean | null;
   global_notice?: string | null;
+  premium_lock_title?: string | null;
+  premium_lock_message?: string | null;
 };
 
 type SubscriptionStatusResponse = {
@@ -76,6 +80,9 @@ const defaultPublicSiteSettings: PublicSiteSettings = {
   maintenanceMode: false,
   globalNoticeEnabled: false,
   globalNotice: "",
+  premiumLockTitle: "Subscription required",
+  premiumLockMessage:
+    "This channel requires the {plan_name} plan to watch live.",
 };
 
 const FAVORITES_STORAGE_KEY = "velora:favorites:v1";
@@ -458,6 +465,10 @@ export default function Home() {
             defaultPublicSiteSettings.globalNoticeEnabled,
           globalNotice:
             row.global_notice ?? defaultPublicSiteSettings.globalNotice,
+          premiumLockTitle:
+            row.premium_lock_title ?? defaultPublicSiteSettings.premiumLockTitle,
+          premiumLockMessage:
+            row.premium_lock_message ?? defaultPublicSiteSettings.premiumLockMessage,
         };
 
         setSiteSettings(nextSettings);
@@ -1005,6 +1016,15 @@ export default function Home() {
   const selectedIsPremiumLocked =
     selectedIsPremium && !selectedHasPremiumAccess;
 
+  const selectedRequiredPlanName =
+    selectedChannel.requiredPlanName?.trim() || "VELORA premium";
+
+  const premiumLockMessage =
+    siteSettings.premiumLockMessage.replaceAll(
+      "{plan_name}",
+      selectedRequiredPlanName
+    );
+
   const heroHeading =
     siteSettings.heroHeading.trim() || "Television, Reimagined.";
   const commaIndex = heroHeading.indexOf(",");
@@ -1252,14 +1272,14 @@ export default function Home() {
                     </p>
 
                     <h3 className="mt-2 text-xl font-black tracking-tight text-white sm:text-2xl">
-                      Subscription required
+                      {siteSettings.premiumLockTitle}
                     </h3>
 
                     <p className="mt-2 max-w-md text-xs leading-5 text-white/50 sm:text-sm sm:leading-6">
                       {!subscriptionChecked && isAuthenticated
                         ? "Checking your VELORA subscription..."
                         : isAuthenticated
-                          ? "This channel requires an active VELORA premium subscription."
+                          ? premiumLockMessage
                           : "Sign in first, then choose a premium plan to unlock this channel."}
                     </p>
 

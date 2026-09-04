@@ -93,6 +93,8 @@ type SiteSettings = {
   maintenanceMode: boolean;
   globalNoticeEnabled: boolean;
   globalNotice: string;
+  premiumLockTitle: string;
+  premiumLockMessage: string;
 };
 
 type SiteSettingsRow = {
@@ -105,6 +107,8 @@ type SiteSettingsRow = {
   maintenance_mode?: boolean | null;
   global_notice_enabled?: boolean | null;
   global_notice?: string | null;
+  premium_lock_title?: string | null;
+  premium_lock_message?: string | null;
 };
 
 type AdminChannelRow = {
@@ -215,6 +219,9 @@ const defaultSiteSettings: SiteSettings = {
   maintenanceMode: false,
   globalNoticeEnabled: false,
   globalNotice: "",
+  premiumLockTitle: "Subscription required",
+  premiumLockMessage:
+    "This channel requires the {plan_name} plan to watch live.",
 };
 
 function ConfigBadge({
@@ -979,6 +986,10 @@ export default function AdminPage() {
               defaultSiteSettings.globalNoticeEnabled,
             globalNotice:
               row.global_notice ?? defaultSiteSettings.globalNotice,
+            premiumLockTitle:
+              row.premium_lock_title ?? defaultSiteSettings.premiumLockTitle,
+            premiumLockMessage:
+              row.premium_lock_message ?? defaultSiteSettings.premiumLockMessage,
           });
         }
       } catch (error) {
@@ -1960,6 +1971,10 @@ export default function AdminPage() {
           row.global_notice_enabled ??
           defaultSiteSettings.globalNoticeEnabled,
         globalNotice: row.global_notice ?? defaultSiteSettings.globalNotice,
+        premiumLockTitle:
+          row.premium_lock_title ?? defaultSiteSettings.premiumLockTitle,
+        premiumLockMessage:
+          row.premium_lock_message ?? defaultSiteSettings.premiumLockMessage,
       });
 
       setSettingsNotice("VELORA settings were saved successfully.");
@@ -4283,6 +4298,55 @@ export default function AdminPage() {
                         className="h-11 w-full rounded-xl border border-white/10 bg-[#171717] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20 disabled:opacity-60"
                       />
                     </label>
+
+                    <div className="mt-6 border-t border-white/10 pt-6">
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-400">
+                        Premium access
+                      </p>
+
+                      <h3 className="mt-2 text-lg font-black text-white">
+                        Premium lock message
+                      </h3>
+
+                      <p className="mt-2 text-xs leading-5 text-white/40">
+                        Use {"{plan_name}"} anywhere in the message to show the
+                        plan assigned to the selected channel.
+                      </p>
+
+                      <label className="mt-5 block space-y-2 text-sm text-white/65">
+                        Premium lock title
+                        <input
+                          value={siteSettings.premiumLockTitle}
+                          onChange={(event) =>
+                            setSiteSettings((current) => ({
+                              ...current,
+                              premiumLockTitle: event.target.value,
+                            }))
+                          }
+                          disabled={isLoadingSettings || isSavingSettings}
+                          maxLength={100}
+                          className="h-11 w-full rounded-xl border border-white/10 bg-[#171717] px-3 text-white outline-none transition focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20 disabled:opacity-60"
+                        />
+                      </label>
+
+                      <label className="mt-5 block space-y-2 text-sm text-white/65">
+                        Premium lock message
+                        <textarea
+                          value={siteSettings.premiumLockMessage}
+                          onChange={(event) =>
+                            setSiteSettings((current) => ({
+                              ...current,
+                              premiumLockMessage: event.target.value,
+                            }))
+                          }
+                          disabled={isLoadingSettings || isSavingSettings}
+                          rows={3}
+                          maxLength={260}
+                          placeholder="This channel requires the {plan_name} plan to watch live."
+                          className="w-full resize-y rounded-xl border border-white/10 bg-[#171717] px-3 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-red-500/60 focus:ring-2 focus:ring-red-500/20 disabled:opacity-60"
+                        />
+                      </label>
+                    </div>
                   </section>
 
                   <div className="space-y-5">
